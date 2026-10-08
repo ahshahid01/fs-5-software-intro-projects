@@ -1,0 +1,54 @@
+Step 5 - Lap Stats (max speed, max acceleration, time accelerating, time coasting)
+
+Lap windows (from Step 4):
+   Lap 1: 20 - 68 s
+   Lap 2: 95 - 133 s
+
+Method for selecting each lap:
+   Built a True/False mask for each lap, (time >= start) & (time <= end),
+   and used it to filter both the time and speed columns. Because both
+   columns are filtered with the same mask, they still line up row for row.
+   Checked: the first/last filtered times match the window, and the time
+   and speed columns have the same length.
+
+   Speed is in m/s, converted from SME_TRQSPD_Speed (motor RPM):
+   speed = RPM * gear ratio (12/41) * 2 * pi * wheel radius (0.2 m) / 60
+
+--------------------------------------------------------------------------
+1. Max speed
+--------------------------------------------------------------------------
+   Lap 1: 10.54 m/s  (~37.9 km/h), at ~25 s
+   Lap 2: 11.68 m/s  (~42.1 km/h), at ~99.0 s
+
+   Method: .max() on each lap's filtered speed column. Checked against the
+   speed vs. time graph (peaks near 25 s and just before 100 s).
+
+   Note: with the old Lap 2 start (100 s), the max was only 10.43 m/s,
+   because the real peak at ~99 s was outside the window. Moving the start
+   to 95 s (see Step 4) fixed this.
+
+--------------------------------------------------------------------------
+2. Max acceleration
+--------------------------------------------------------------------------
+   Lap 1: TODO
+   Lap 2: TODO
+
+   Method: TODO (plan: a = dv/dt using .diff() on speed and time)
+   Sanity check: should be in the ballpark of the steep rises on the speed
+   graph (~10 m/s gained over a few seconds).
+
+--------------------------------------------------------------------------
+3. Time spent accelerating
+--------------------------------------------------------------------------
+   Lap 1: TODO
+   Lap 2: TODO
+
+   Method: TODO
+
+--------------------------------------------------------------------------
+4. Time spent coasting
+--------------------------------------------------------------------------
+   Lap 1: TODO
+   Lap 2: TODO
+
+   Method: TODO

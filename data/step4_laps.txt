@@ -1,0 +1,34 @@
+Step 4 - Lap Count
+
+1. Lap definition: A lap starts when the car pulls away from rest at the
+   start area and ends when it crosses back over the start-line longitude.
+   One lap = launching from the start area, driving to the far end of the
+   straight, turning around, and coming back over the start line.
+
+   Why "pulls away from rest" instead of "crosses the start-line longitude":
+   before Lap 2 the car was parked about 14 m behind the start line
+   (longitude -121.733353 vs. the start line at about -121.733200). It did
+   its whole launch (0 -> ~11.7 m/s) before reaching the line, and only
+   crossed it at ~99.95 s. Using the longitude crossing would cut the launch
+   and the top speed out of Lap 2. Starting each lap when the car leaves
+   rest captures the full launch for both laps.
+
+   How the start times were found: the last time speed was ~0 (<= 0.1 m/s)
+   before each launch, checked against the pedal (throttle goes above 0
+   right before each launch).
+     - Lap 1: car last at rest at ~20.1 s (pedal starts rising ~19-20 s)
+     - Lap 2: car last at rest at ~94.8 s (pedal starts rising ~94.4 s)
+
+2. Lap count: 1.5 laps
+
+3. Lap times:
+   Lap 1: 20 - 68 s
+   Lap 2: 95 - 133 s
+   Note: Lap 2 never crosses back over the start line, so it ends when
+   the car comes to a stop.
+
+4. Side note: the GPS longitude barely changes during the first few
+   seconds of each launch even though the car is moving (e.g. it stays at
+   -121.733353 from 85 s to ~96 s). The GPS updates slowly / has limited
+   resolution, so speed (from motor RPM) is more reliable than GPS for
+   finding exactly when the car starts moving.

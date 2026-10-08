@@ -40,16 +40,16 @@ brake = pd["ETC_STATUS_BRAKE_SENSE_VOLTAGE"]
 #Find coasting if niether is true
 #overlay on graph to label
 
-fig, axes = plt.subplots(2, 1, sharex=True)
+# fig, axes = plt.subplots(2, 1, sharex=True)
 
-axes[0].plot(time, meters_second(rpm), label="Speed (m/s)")
-axes[0].set_ylabel("Speed (m/s)")
-axes[0].grid(True)
+# axes[0].plot(time, meters_second(rpm), label="Speed (m/s)")
+# axes[0].set_ylabel("Speed (m/s)")
+# axes[0].grid(True)
 
-axes[1].plot(time, brake, label="Brake Voltage (V)", color='orange')
-axes[1].set_xlabel("Time (s)")
-axes[1].set_ylabel("Brake sensor (raw)")
-axes[1].grid(True)
+# axes[1].plot(time, brake, label="Brake Voltage (V)", color='orange')
+# axes[1].set_xlabel("Time (s)")
+# axes[1].set_ylabel("Brake sensor (raw)")
+# axes[1].grid(True)
 
 #plt.show()
 
@@ -88,51 +88,132 @@ def find_periods(condition):
 
 
 acc_starts, acc_ends = find_periods(accelerating)
-for s, e in zip(acc_starts, acc_ends):
-    print(f"{s:.2f} - {e:.2f}")
-print("")
+#for s, e in zip(acc_starts, acc_ends):
+    #print(f"{s:.2f} - {e:.2f}")
+
 
 bracking_starts, braking_ends = find_periods(braking)
-for s, e in zip(bracking_starts, braking_ends):
-    print(f"{s:.2f} - {e:.2f}")
-print("")
+#for s, e in zip(bracking_starts, braking_ends):
+    #print(f"{s:.2f} - {e:.2f}")
 
 coasting_starts, coasting_ends = find_periods(coasting)
-for s, e in zip(coasting_starts, coasting_ends):
-    print(f"{s:.2f} - {e:.2f}")
-print("")
+#for s, e in zip(coasting_starts, coasting_ends):
+    #print(f"{s:.2f} - {e:.2f}")
 
-fig, axes = plt.subplots(3, 1, sharex=True)
 
-axes[0].plot(time, meters_second(rpm), label="Speed (m/s)")
-axes[0].set_ylabel("Speed (m/s)")
-axes[0].grid(True)
-axes[0].set_title("Coasting")
-for s, e in zip(coasting_starts, coasting_ends):
-    axes[0].axvspan(s, e, color='blue', alpha=0.3)
+# fig, axes = plt.subplots(3, 1, sharex=True)
 
-axes[1].plot(time, brake, label="Braking", color='orange')
-axes[1].set_ylabel("Brake sensor (raw)")
-axes[1].grid(True)
-axes[1].set_title("Braking")
-for s, e in zip(bracking_starts, braking_ends):
-    axes[1].axvspan(s, e, color='red', alpha=0.3)
+# axes[0].plot(time, meters_second(rpm), label="Speed (m/s)")
+# axes[0].set_ylabel("Speed (m/s)")
+# axes[0].grid(True)
+# axes[0].set_title("Coasting")
+# for s, e in zip(coasting_starts, coasting_ends):
+#     axes[0].axvspan(s, e, color='blue', alpha=0.3)
 
-axes[2].plot(time, pedal, label="Acceleration", color='green')
-axes[2].set_xlabel("Time (s)")
-axes[2].set_ylabel("Pedal sensor %")
-axes[2].grid(True)
-axes[2].set_title("Accelerating")
-for s, e in zip(acc_starts, acc_ends):
-    axes[2].axvspan(s, e, color='green', alpha=0.3)
+# axes[1].plot(time, brake, label="Braking", color='orange')
+# axes[1].set_ylabel("Brake sensor (raw)")
+# axes[1].grid(True)
+# axes[1].set_title("Braking")
+# for s, e in zip(bracking_starts, braking_ends):
+#     axes[1].axvspan(s, e, color='red', alpha=0.3)
 
-plt.tight_layout()
+# axes[2].plot(time, pedal, label="Acceleration", color='green')
+# axes[2].set_xlabel("Time (s)")
+# axes[2].set_ylabel("Pedal sensor %")
+# axes[2].grid(True)
+# axes[2].set_title("Accelerating")
+# for s, e in zip(acc_starts, acc_ends):
+#     axes[2].axvspan(s, e, color='green', alpha=0.3)
+
+# plt.tight_layout()
+
+
+lati = pd["VDM_GPS_Latitude"]
+longi = pd["VDM_GPS_Longitude"]
+altitude = pd["VDM_GPS_ALTITUDE"]
+
+# plt.figure(figsize=(8, 6))
+# plt.plot(longi, lati)
+# plt.xlabel("Longitude")
+# plt.ylabel("Latitude")
+# plt.title("Vehicle GPS Path")
+# plt.grid(True)
+# plt.axis('equal')
+
+# # plt.figure(figsize=(8, 6))
+# # plt.plot(time, altitude)
+# # plt.xlabel("Time (s)")
+# # plt.ylabel("Altitude (m)")
+# # plt.title("Vehicle Altitude")
+# # plt.grid(True)
+
+# plt.figure(figsize=(8, 6))
+# plt.scatter(longi, lati, c=time, cmap='viridis', s=10)
+# plt.colorbar(label='Time (s)')
+# plt.xlabel("Longitude")
+# plt.ylabel("Latitude")
+# plt.title("Vehicle GPS Path with Time")
+# plt.grid(True)
+# plt.axis('equal')
+# # plt.tight_layout()
+# plt.savefig("gps_path_with_time.png", dpi=300)
+# plt.xticks(rotation=45)
+
+# plt.figure(figsize=(8, 6))
+# plt.plot(time, longi, label="Longitude")
+# plt.xlabel("Time (s)")
+# plt.ylabel("Longitude")
+# plt.title("Vehicle GPS Path with Time")
+# plt.grid(True)
+
+
+# fig, axes = plt.subplots(2, 1, sharex=True)
+
+# axes[0].plot(time, longi, label="Longitude")
+# axes[0].set_ylabel("Longitude")
+# axes[0].grid(True)
+# axes[0].set_title("Longitude Over Time")
+
+# axes[1].plot(time, speed, label="Speed (m/s)", color='orange')
+# axes[1].set_xlabel("Time (s)")
+# axes[1].set_ylabel("Speed (m/s)")
+# axes[1].grid(True)
+# axes[1].set_title("Speed Over Time")
+
+after_start_1 = (time >= 20)
+before_end_1 = (time <= 68)
+after_start_2 = (time >= 95)
+before_end_2 = (time <= 133)
+
+lap_mask = after_start_1 & before_end_1
+lap1_times = time.filter(lap_mask)
+lap1_speed = speed.filter(lap_mask)
+
+lap_mask2 = after_start_2 & before_end_2
+lap2_times = time.filter(lap_mask2)
+lap2_speed = speed.filter(lap_mask2)
+
+delta_speed_1 = lap1_speed.diff()
+delta_time_1 = lap1_times.diff()
+
+acceleration = delta_speed_1 / delta_time_1
+
+row_number = acceleration.arg_max()
+
+for j in range(row_number - 10, row_number + 11):
+    print(f"{lap1_times[j]:.3f} - {lap1_speed[j]:.3f} - {acceleration[j]:.3f}")
+
+# print(lap1_times.first(), lap1_times.last(), lap1_speed.max())
+# print(lap1_times.count(), lap1_times, lap1_speed)
+# print("")
+
+# print(lap2_times.first(), lap2_times.last(), lap2_speed.max())
+# print(lap2_times.count(), lap2_times, lap2_speed)
+# print("")
+
 plt.show()
 
-#print(braking.sum())
-#print(accelerating.sum())
-#print(coasting.sum())
-#print(parked.sum())
+
 
 
 
