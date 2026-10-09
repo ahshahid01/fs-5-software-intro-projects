@@ -1,0 +1,195 @@
+Step 5 - Lap Stats (max speed, max acceleration, time accelerating, time coasting)
+
+Lap windows (from Step 4):
+   Lap 1: 20 - 68 s
+   Lap 2: 95 - 133 s
+
+Method for selecting each lap:
+   Built a True/False mask for each lap, (time >= start) & (time <= end),
+   and used it to filter both the time and speed columns. Because both
+   columns are filtered with the same mask, they still line up row for row.
+   Checked: the first/last filtered times match the window, and the time
+   and speed columns have the same length.
+
+   Speed is in m/s, converted from SME_TRQSPD_Speed (motor RPM):
+   speed = RPM * gear ratio (12/41) * 2 * pi * wheel radius (0.2 m) / 60
+
+--------------------------------------------------------------------------
+1. Max speed
+--------------------------------------------------------------------------
+   Lap 1: 10.54 m/s  (~37.9 km/h), at ~25 s
+   Lap 2: 11.68 m/s  (~42.1 km/h), at ~99.0 s
+
+   Method: .max() on each lap's filtered speed column. Checked against the
+   speed vs. time graph (peaks near 25 s and just before 100 s).
+
+   Note: with the old Lap 2 start (100 s), the max was only 10.43 m/s,
+   because the real peak at ~99 s was outside the window. Moving the start
+   to 95 s (see Step 4) fixed this.
+
+   Note: this is WHEEL speed (from motor RPM), which equals car speed only
+   if the tires grip. Lap 2's peak lands on a wiggle in the speed trace
+   right after a hard launch (63% pedal), likely wheelspin and the
+   drivetrain winding up and springing back, so .max() picks the top of a
+   wobble. A 0.5 s average gives 10.83 m/s and lag-corrected GPS gives
+   ~11.0 m/s, so the car's true top speed was probably closer to 11 m/s
+   (~6-7% lower). Lap 1 is barely affected (0.5 s average: 10.30 m/s).
+
+--------------------------------------------------------------------------
+2. Max acceleration
+--------------------------------------------------------------------------
+   FINAL: speed-based values (0.5 s window), checked against the IMU -
+   see "IMU check" at the end of this section.
+
+   Lap 1: 6.66 m/s^2 (~0.68 g), at ~51.6 s (row 2657)   [n = 42, 0.5 s]
+   Lap 2: 7.13 m/s^2 (~0.73 g), at ~98.3 s (row 281)    [n = 42, 0.5 s]
+          (n = 21 gave 8.98 m/s^2 (~0.92 g), at ~98.0 s (row 250))
+
+   Method: a = dv/dt, using .diff(n) on both the lap's speed and time
+   columns, then .max() and .arg_max() to find the peak and when it happened.
+
+   First attempt (wrong): .diff() with n = 1 (row to row, 0.0119 s apart)
+   gave 92.4 m/s^2 (~9.4 g) for Lap 1, which is not physically possible.
+   Printing the rows around the spike (~51.38 s) showed why:
+     - The speed sensor only updates every 2nd row. Forward-fill copies the
+       old value in between, so every other row has dv = 0 and the whole
+       change lands in a single 0.0119 s step.
+     - One outlier reading (5.805 -> 6.902 m/s in one step, ~6x larger than
+       the jumps around it, with speed dropping slightly right before and
+       after) became the max.
+     - Dividing by such a small dt multiplies any noise by ~84.
+   Over the 0.24 s around the spike, speed went 5.456 -> 7.423 m/s, about
+   8.3 m/s^2, so the car really was accelerating hard there, just not 92.
+
+   Fix: take the difference over a longer window, .diff(n) with n rows
+   (~84 rows per second). Lap 1 results:
+     n = 21 (~0.25 s): 9.19 m/s^2 (~0.94 g), row 2658
+     n = 42 (~0.5 s):  6.66 m/s^2 (~0.68 g), row 2657
+     n = 84 (~1 s):    4.38 m/s^2 (~0.45 g), row 2657
+   All three land at the same spot (~51.6 s, the steep rise on the speed
+   graph), so it's a real event, not noise. The value drops as the window
+   grows because the hard push is short, and longer windows average in
+   slower parts.
+
+   Decision: use 0.5 s (n = 42) for both laps. It is long
+   enough to average out the forward-filled samples and the outlier, but
+   short enough not to flatten the real push. The true peak is roughly in
+   the 4.4 - 9.2 m/s^2 range depending on the window.
+
+   IMU check:
+   Setup:
+     - VDM_X_AXIS_ACCELERATION points BACKWARDS (positive = slowing), so
+       forward acceleration = -X * 9.81 m/s^2.
+     - Offset: during the clean coast at 26-40 s, the IMU read 0.317 m/s^2
+       (0.032 g) more negative than the slope of the speed graph. Likely
+       the sensor is mounted with a slight tilt. Added +0.317 to correct it.
+       The offset isn't perfectly constant (other coasts are off by 0.05 -
+       0.14 m/s^2), so the IMU is good to about +/- 0.1 m/s^2.
+     - Averaged the IMU over the same windows as the speed method
+       (rolling_mean(n) vs .diff(n)) so they're compared fairly.
+
+   Results (m/s^2):
+                    speed-based (motor RPM)    IMU (corrected)
+     Lap 1, 0.25 s:  9.19 at 51.61 s          5.48 at 35.48 s (*)
+     Lap 1, 0.5 s:   6.66 at 51.59 s          4.52 at 51.83 s
+     Lap 1, 1 s:     4.38 at 51.59 s          3.33 at 52.05 s
+     Lap 2, 0.25 s:  8.98 at 97.98 s          4.83 at 98.91 s
+     Lap 2, 0.5 s:   7.13 at 98.35 s          4.38 at 98.91 s
+     Lap 2, 1 s:     5.53 at 98.69 s          3.77 at 99.00 s
+     (*) a bump/vibration spike with no pedal and no speed change, not a
+         real push. Short IMU windows pick up bumps.
+
+   What it shows:
+     - Timing agrees: both methods put the peak in the same push (~51.6 -
+       51.8 s in Lap 1, ~98 - 99 s in Lap 2).
+     - Size doesn't: at 0.5 s the IMU peak is ~2.1 m/s^2 (Lap 1) and
+       ~2.8 m/s^2 (Lap 2) lower.
+     - Over whole pushes the two agree better: Lap 1 launch (20.1-24.6 s)
+       averages 2.22 from speed vs 2.37 from IMU. The gap is mainly at the
+       short, hard peaks.
+
+   Likely reason: motor RPM measures how fast the WHEELS spin, the IMU
+   measures how fast the CAR speeds up. Under hard throttle (57-63% pedal
+   at both peaks) the rear wheels can spin a little faster than the car is
+   moving (wheelspin), and the speed trace has visible wiggles right at
+   both peaks (driveline oscillation). Both make the wheels look like they
+   accelerate harder than the car does. Not proven: GPS speed updates only
+   every ~0.24 s and lags ~0.9 s, so it's too coarse to confirm.
+
+   Decision: report the speed-based values (6.66 / 7.13 m/s^2). This
+   uses SME_TRQSPD_Speed like the rest of the project, so it matches max
+   speed and the accelerating/coasting definitions. Keep in mind it's
+   wheel acceleration; the IMU says the car body itself peaked lower
+   (4.52 / 4.38 m/s^2).
+
+--------------------------------------------------------------------------
+3. Time spent accelerating
+--------------------------------------------------------------------------
+   Lap 1: 9.90 s
+            20.00 - 24.82 s  (4.82 s)   launch (period started at 19.81, clipped)
+            41.41 - 42.96 s  (1.56 s)   light pedal (~7%), 4.3 -> 4.5 m/s
+            47.11 - 48.57 s  (1.46 s)   light pedal (~8%), 3.8 -> 4.3 m/s
+            50.22 - 52.28 s  (2.07 s)   hard push (up to 59%), 3.4 -> 7.7 m/s
+   Lap 2: 4.67 s
+            95.00 - 99.67 s  (4.67 s)   launch (period started at 94.33, clipped)
+
+   Definition: accelerating = the car is GAINING SPEED (dv/dt > 0), not
+   "pedal > 0". Light pedal can just hold speed or still slow down, so
+   pedal shows what the driver asks for, not what the car does.
+
+   Method:
+     1. dv/dt over a 0.5 s window (.diff(42), same as max acceleration),
+        computed on the whole run so each lap's first 0.5 s isn't lost.
+        Row-to-row (.diff(1)) was too noisy: it marked 17% of a pure
+        coast (26-40 s) as speeding up.
+     2. find_periods on (dv/dt > 0): gaps under 0.1 s merged, periods
+        under 0.7 s dropped. The junk periods were all under 0.2 s and the
+        shortest real push is ~1 s, so the result doesn't depend on the
+        exact cutoff.
+     3. Clipped each period to the lap window, skipped any fully outside
+        the lap, and added up (end - start).
+
+   Caveat: merging gaps pulls 41.41 - 41.94 s into the ~42 s push even
+   though speed dropped slightly there, and stretches the 50.22 / 52.28 s
+   edges, so Lap 1 is roughly 0.5 - 1 s high.
+
+--------------------------------------------------------------------------
+4. Time spent coasting
+--------------------------------------------------------------------------
+   Lap 1: 37.18 s
+            24.63 - 41.18 s  (16.55 s)
+            42.88 - 46.41 s  ( 3.53 s)
+            48.63 - 49.53 s  ( 0.90 s)
+            51.80 - 68.00 s  (16.20 s)   (clipped at lap end)
+   Lap 2: 32.83 s
+            99.33 - 103.03 s  ( 3.70 s)
+           103.83 - 132.96 s  (29.13 s)
+
+   Definition: coasting = no throttle (pedal == 0) AND no brake (brake
+   voltage <= 375) AND moving (speed > 0.1 m/s). Coasting is about what
+   the driver is doing, not what the speed is doing: a car rolling
+   downhill with nothing pressed is still coasting even if it speeds up,
+   so "not gaining speed" is NOT part of the definition. (Checked: with
+   pedal 0, speed never rose for more than 0.28 s, so no hill here was
+   steep enough to matter.)
+
+   Method: same as time accelerating. find_periods on the coasting mask
+   (gaps under 0.1 s merged, periods under 0.7 s dropped), clipped each
+   period to the lap window, added up (end - start).
+
+   Notes:
+     - The brake is never pressed during either lap (brake voltage max
+       372, under the 375 threshold), so "no brake" removes nothing here,
+       but it stays in the definition. ETC_STATUS_BRAKELIGHT was not used:
+       it reads 1 for 95% of the run, so it isn't reliable.
+     - The Lap 2 gap at 103.03 - 103.83 s is the driver tapping the pedal
+       (up to ~42%) a few times. Speed kept dropping, so it isn't
+       accelerating either; it's correctly left out of coasting.
+     - Accelerating and coasting overlap slightly: Lap 1 by ~0.75 s
+       (24.63-24.82, 42.88-42.96, 51.80-52.28) and Lap 2 by ~0.34 s
+       (99.33-99.67). dv/dt uses the PREVIOUS 0.5 s, so an accelerating
+       period keeps going a little after the pedal is released. A centered
+       window would shrink this.
+     - Accelerating + coasting don't add up to the whole lap: rows with
+       the pedal pressed but the car not gaining speed (holding speed)
+       belong to neither.

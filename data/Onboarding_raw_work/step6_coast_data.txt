@@ -1,0 +1,81 @@
+Step 6 - Clean Coastdown Data (coasting above 5 m/s, at least 1 s long)
+
+Task (projects.md): "From the coasting data (from all laps), remove
+anything below 5 m/s and anything below a second."
+
+Starting point (from Step 5):
+   coasting_5 = no throttle (pedal == 0) AND no brake (brake voltage <= 375)
+                AND moving (speed > 0.1 m/s)
+   Lap windows (Step 4): Lap 1 = 20 - 68 s, Lap 2 = 95 - 133 s
+
+--------------------------------------------------------------------------
+Result
+--------------------------------------------------------------------------
+   4 clean coasts, 38.89 s total, 3,259 rows
+
+   Lap 1: 23.57 s
+            24.63 - 38.77 s  (14.14 s)   10.54 -> 5.00 m/s   1,184 rows
+            51.80 - 61.22 s  ( 9.43 s)    8.20 -> 5.00 m/s     791 rows
+   Lap 2: 15.32 s
+            99.33 - 103.03 s  ( 3.70 s)  10.70 -> 9.02 m/s     312 rows
+           103.83 - 115.46 s  (11.62 s)   8.81 -> 5.01 m/s     972 rows
+
+--------------------------------------------------------------------------
+Order of the two filters
+--------------------------------------------------------------------------
+   Decision: remove readings below 5 m/s FIRST, then drop any piece that
+   is now shorter than 1 s. Whatever is left has to pass both rules.
+
+   Why the order matters: a coast can be long overall but mostly below
+   5 m/s. Example: a 4 s coast where only the first 0.5 s is above 5 m/s.
+     - 1 s check first: the 4 s coast passes, then the speed cut leaves a
+       0.5 s piece that slips through.
+     - speed cut first: only 0.5 s is left, which fails the 1 s check and
+       is removed. This is the one we want.
+
+--------------------------------------------------------------------------
+Method (Onboarding.py, Step 6)
+--------------------------------------------------------------------------
+   1. Mask: coast_6 = coasting_5 & in_laps & (speed >= 5)
+      in_laps = Lap 1 mask OR Lap 2 mask, so coasts before 20 s, between
+      68 and 95 s and after 133 s are left out ("from all laps").
+   2. find_periods(coast_6) turns the mask into start/end times (gaps
+      under 0.1 s merged, periods 0.7 s or shorter dropped).
+   3. Kept only periods with end - start >= 1 s.
+   4. For each kept period, saved its time and speed rows as a separate
+      segment (coast_segments). Rows under 5 m/s inside a period are also
+      removed (see notes).
+
+--------------------------------------------------------------------------
+What got removed
+--------------------------------------------------------------------------
+   Whole coasts (never reach 5 m/s):
+     Lap 1  42.88 - 46.41 s  (top speed 4.80 m/s)
+     Lap 1  48.63 - 49.53 s  (top speed 4.24 m/s)
+
+   Slow ends cut off (speed dropped under 5 m/s):
+     Lap 1  24.63 - 41.18 s  ->  ends at 38.77 s
+     Lap 1  51.80 - 68.00 s  ->  ends at 61.22 s
+     Lap 2 103.83 - 132.96 s ->  ends at 115.46 s
+
+   Unchanged: Lap 2  99.33 - 103.03 s (never below 9 m/s)
+
+--------------------------------------------------------------------------
+Notes
+--------------------------------------------------------------------------
+   - Dips under 5 m/s: near the end of a coast the speed hovers right at
+     5 m/s and a few readings dip just under (lowest 4.959). find_periods
+     merges gaps under 0.1 s, so these rows were inside the periods
+     (6, 4, 0 and 6 rows). They were removed, so every row is >= 5 m/s.
+     This leaves small holes in the segments (largest gap 0.083 s), which
+     is fine as long as Step 7 divides by the real time difference.
+   - The 1 s check removed nothing in this data: find_periods already
+     drops anything 0.7 s or shorter, and no piece was between 0.7 and
+     1 s. It stays in the code so the rule is applied.
+   - Lap 2's split at 103.03 - 103.83 s is the driver tapping the pedal,
+     so it is correctly not coasting (see Step 5).
+   - Each coast is kept as its own segment so Step 7 doesn't compute
+     dv/dt across the jump from one coast to the next (e.g. 38.77 s ->
+     51.80 s).
+   - Speed is wheel speed from motor RPM. No wheelspin concern during
+     coasts (no throttle).

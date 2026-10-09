@@ -1,0 +1,21 @@
+Step 2 - Speed of the car at 10 s
+
+Answer: 0 m/s (the car is stopped).
+
+Speed is in m/s, converted from SME_TRQSPD_Speed (motor RPM):
+   speed = RPM * gear ratio (12/41) * 2 * pi * wheel radius (0.2 m) / 60
+
+How I found it:
+   - On the speed vs. time graph, the line is flat at 0 around 10 s.
+   - Checked the data directly: the row closest to 10 s (t = 9.998 s,
+     row 839) has SME_TRQSPD_Speed = 0 RPM -> 0 m/s.
+   - It isn't a forward-fill artifact: the raw (not forward-filled) data
+     has 84 real readings between 9.5 and 10.5 s, and all of them are 0.
+
+Context:
+   - The car last moved at ~6.77 s (a short roll at the start, max
+     ~0.8 m/s) and doesn't move again until ~19.86 s, right before the
+     Lap 1 launch. So 10 s is in the middle of a ~13 s stop.
+   - GPS agrees: VDM_GPS_SPEED is 0.01 - 0.04 m/s between 9 and 11 s,
+     which is just GPS noise for a parked car. (VDM_GPS_SPEED is already
+     in m/s, not mph like projects.md says - see step5 notes.)

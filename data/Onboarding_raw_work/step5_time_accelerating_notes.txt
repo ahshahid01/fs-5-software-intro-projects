@@ -1,0 +1,128 @@
+Step 5 - NOTES: Time Spent Accelerating (and Coasting)
+Working notes on the problems and choices for this part of Step 5.
+Final answers go in step5_lap_stats.txt, not here.
+
+--------------------------------------------------------------------------
+The goal
+--------------------------------------------------------------------------
+For each lap, find how many seconds the car spent accelerating (and later,
+coasting).
+
+Starting point:
+   accelerating = (pedal > 0) & moving      (Onboarding.py, Step 3)
+   lap_mask     = (time >= start) & (time <= end)
+
+   accelerating & lap_mask -> True on every row where the pedal is
+   pressed, the car is moving, and it's during that lap.
+
+The problem: that gives a list of True/False rows, not a number of
+seconds. There are several ways to turn it into seconds, and they don't
+all give the same answer.
+
+--------------------------------------------------------------------------
+Trap: last time - first time
+--------------------------------------------------------------------------
+Filtering the lap's times with the accelerating mask and taking
+(last - first) is WRONG. Accelerating isn't one continuous block. Lap 1
+has a push at ~20-25 s and another at ~50-52 s, so last - first would
+count everything in between (including all the coasting) as accelerating.
+
+--------------------------------------------------------------------------
+Option 1: count True rows x time per row
+--------------------------------------------------------------------------
+- Count the True rows (True = 1, False = 0) and multiply by ~0.0119 s.
+- Simple, but it ASSUMES every row is the same length of time.
+- For this data that's OK: dt is always between 0.01187 and 0.01192 s.
+  It would break on data with uneven spacing or missing rows.
+
+--------------------------------------------------------------------------
+Option 2: add up the actual time steps (recommended)
+--------------------------------------------------------------------------
+- Take .diff() of the lap's time column, so each row knows how much time
+  passed since the previous row.
+- Keep only the dt values where the accelerating mask is True.
+- Add them up.
+- Uses the real timestamps, so it doesn't assume even spacing.
+
+--------------------------------------------------------------------------
+Option 3: add up the periods from Step 3 (find_periods)
+--------------------------------------------------------------------------
+- Add up (end - start) for each acc_starts / acc_ends period inside the
+  lap.
+- Will come out SMALLER than Options 1 and 2, because find_periods:
+    - drops any period shorter than 0.7 s (short pedal taps are ignored)
+    - merges gaps shorter than 0.1 s
+- A period that starts before the lap or ends after it has to be clipped
+  to the lap window, or it counts time outside the lap.
+
+--------------------------------------------------------------------------
+Plan
+--------------------------------------------------------------------------
+- Use Option 2 as the reported answer.
+- Use Option 1 as a check. It should almost match Option 2 for this data.
+- Optional: calculate Option 3 and explain why it's smaller.
+- Sanity check against the speed graph: Lap 1's main pushes are ~20-25 s
+  and ~50-52 s, so the answer should be a few seconds, not ~30.
+- Coasting: same approach, using the coasting mask instead.
+
+--------------------------------------------------------------------------
+Open questions
+--------------------------------------------------------------------------
+- The accelerating mask is "pedal > 0". Does a tiny pedal reading (e.g.
+  1-2%) really mean the driver is accelerating, or is it sensor noise?
+  A higher threshold would change the answer.
+- If Options 1 and 2 don't almost match, find out why before trusting
+  either one.
+
+--------------------------------------------------------------------------
+Update: decisions made (replaces the Plan above)
+--------------------------------------------------------------------------
+- "Accelerating" now means the car is GAINING SPEED, not pedal > 0.
+  Pedal shows what the driver asks for, not what the car does: light
+  pedal (under ~10-20%) can just hold speed or even still slow down.
+- Gaining speed = dv/dt > 0, with dv/dt taken over a 0.5 s window
+  (.diff(42), same window as max acceleration). Row-to-row (.diff(1))
+  marked 17% of a pure coast (26-40 s) as speeding up, because of noise
+  and the speed sensor only updating every other row.
+- dv/dt is computed on the whole run, then cut to laps, so the first
+  0.5 s of each lap isn't lost to .diff().
+- Periods found with find_periods (Option 3): gaps under 0.1 s merged,
+  periods under 0.7 s dropped. Junk slivers were all under 0.2 s and the
+  shortest real push is ~1 s, so any cutoff from ~0.2 to 1.0 s gives the
+  same periods.
+- Side effect of merging: 41.41-41.94 s gets joined into the ~42 s push
+  even though speed dropped there, which adds roughly 0.5-1 s to Lap 1.
+- Done: clipped periods to each lap window and added up (end - start).
+  Lap 1 = 9.90 s, Lap 2 = 4.67 s (details in step5_lap_stats.txt).
+
+--------------------------------------------------------------------------
+For later
+--------------------------------------------------------------------------
+- Step 3 doesn't match Step 5. Step 3's graphs still use pedal > 0 for
+  accelerating (and coasting = what's left over). Fine for now; revisit
+  later and either update Step 3 or explain the difference in the
+  write-up.
+- DONE: coasting = pedal == 0 & brake <= 375 & moving (no "not gaining
+  speed" condition, since a car coasting downhill can speed up).
+  Lap 1 = 37.18 s, Lap 2 = 32.83 s (details in step5_lap_stats.txt).
+- Step 7 / slope: a slope affects coastdown data whether speed goes up or
+  down (gentle downhill = slows less, uphill = slows more), and GPS
+  altitude is too coarse (whole meters, 16 updates per lap) to measure it.
+  Each lap drives out and back, so coasts happen in both directions; a
+  slope pushes opposite ways each direction and largely cancels if both
+  are used in the fit.
+- Accelerating and coasting overlap ~0.75 s (Lap 1) and ~0.34 s (Lap 2)
+  because dv/dt uses the previous 0.5 s. A centered window would fix it;
+  revisit if it matters.
+- IMU note: VDM_X_AXIS_ACCELERATION points backwards (positive = slowing
+  down, correlation with speed-based dv/dt is -0.74). Flip the sign if
+  using it to confirm max acceleration.
+- IMU check of max acceleration done (see step5_lap_stats.txt section 2):
+  same timing, but the IMU peak is ~2-3 m/s^2 lower, likely wheelspin.
+  DECIDED: report the speed-based values (6.66 / 7.13 m/s^2).
+- VDM_GPS_SPEED is already in m/s, NOT mph like projects.md says.
+  Integrated over time it gives the same distance as the GPS lat/lon
+  positions (e.g. 20-68 s: 255 m vs 261 m), and motor speed gives 270 m,
+  so the Step 2 conversion is fine. Don't multiply GPS speed by 0.447.
+  Worth telling whoever wrote projects.md.
+- Jupyter notebook: saving for last, once all the code is written.

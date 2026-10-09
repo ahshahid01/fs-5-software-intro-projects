@@ -1,0 +1,120 @@
+Step 6 - CONTEXT FOR THE NEXT CLAUDE AGENT
+Handoff notes. Read this first, then projects.md, step5_lap_stats.txt and
+step5_time_accelerating_notes.txt.
+
+==========================================================================
+How to work with this user
+==========================================================================
+- This is a LEARNING project (FS onboarding). Default: teach with
+  explanations, hints and guiding questions. Don't hand over finished code
+  or final numbers unless the user explicitly asks ("do it", "implement
+  it", "add the code"). When they ask, do it.
+- Before writing code, check definitions and decisions with the user;
+  they like to make the calls themselves (e.g. they chose the coasting
+  definition and which max-acceleration value to report).
+- Back claims with numbers from the data. Run checks instead of guessing.
+  Point out problems you find, even ones they didn't ask about.
+- Record final answers and methods in stepN_*.txt files in data/ (same
+  style as step5_lap_stats.txt). Working notes go in a separate notes file.
+- Keep code in Onboarding.py in the user's style: simple polars Series
+  ops, plain loops, short comments. Don't delete commented-out code; the
+  user keeps it on purpose.
+- Already known, don't raise again: (1) Step 3 graphs still use the old
+  pedal-based definitions, so they don't match Step 5; (2) the Jupyter
+  notebook is being saved for last.
+
+==========================================================================
+Environment
+==========================================================================
+- Windows. Run Python from data/ with:
+    MPLBACKEND=Agg PYTHONIOENCODING=utf-8 python Onboarding.py
+  (Agg stops plt.show() from blocking; utf-8 stops polars table printing
+  from crashing on cp1252.) Don't use python -I: polars is in user
+  site-packages.
+- Onboarding.py prints the whole forward-filled table first (print(pd),
+  for Step 1), so filter output when checking results.
+- Data: software-data.parquet, 13,838 rows x 255 columns, ~84 rows/s
+  (dt ~ 0.0119 s). Forward-filled with fill_null(strategy="forward").
+
+==========================================================================
+Status
+==========================================================================
+Done: Steps 1, 2 (step2_speed_at_10s.txt), 3, 4 (step4_laps.txt),
+5 (step5_lap_stats.txt). Next: Step 6, then 7 (drag + rolling resistance
+fit) and 8 (write-up).
+
+Step 6 (from projects.md): "From the coasting data (from all laps),
+remove anything below 5 m/s and anything below a second."
+
+==========================================================================
+What Step 6 builds on (Onboarding.py)
+==========================================================================
+- speed = meters_second(rpm): motor RPM -> m/s (12/41 gear ratio, 0.2 m
+  wheel radius). This is WHEEL speed.
+- moving = speed > 0.1
+- Laps (Step 4): Lap 1 = 20-68 s, Lap 2 = 95-133 s. "1.5 laps": Lap 2
+  never crosses back over the start line; it ends when the car stops.
+- find_periods(condition): turns a True/False mask into (starts, ends)
+  lists. Merges gaps under 0.1 s, drops periods 0.7 s or shorter. Works
+  on the full `time` column, so masks must be full length.
+- time_in_lap(starts, ends, lap_start, lap_end): clips periods to a lap
+  window, PRINTS them, returns only the TOTAL seconds. It does not return
+  the clipped periods, which Step 6 will need.
+- Step 5 coasting (the one to use, NOT Step 3's `coasting` variable):
+    coasting_5 = (pedal == 0) & (brake <= 375) & moving
+    coast_starts, coast_ends = find_periods(coasting_5)
+  "Not gaining speed" was deliberately left out: coasting is about the
+  driver (no throttle, no brake), and a car coasting downhill can speed up.
+- Step 5 coasting periods clipped to the laps (37.18 s / 32.83 s):
+    Lap 1: 24.63-41.18, 42.88-46.41, 48.63-49.53, 51.80-68.00
+    Lap 2: 99.33-103.03, 103.83-132.96
+  coast_starts/coast_ends ALSO contain periods outside the laps (before
+  20 s, between 68 and 95 s, after 133 s). Step 6 says "from all laps",
+  so only the in-lap parts should go forward.
+
+==========================================================================
+Things to think about in Step 6 (raise as questions, don't decide)
+==========================================================================
+- Order of filters: remove rows under 5 m/s first, then drop pieces
+  shorter than 1 s? Removing slow rows can cut a long coast short or
+  split it, so the 1 s check should probably come after the speed cut.
+- What "anything below a second" applies to: whole coasting periods, or
+  the pieces left after the 5 m/s cut.
+- Expected: Lap 1's 48.63-49.53 s coast (0.90 s) is dropped. Speed in it
+  is around 4 m/s anyway.
+- The output should be data rows (time + speed), not just totals,
+  because Step 7 computes dv/dt on it and fits dv/dt vs v^2. Keeping each
+  coast as a separate segment helps: dv/dt must not be computed across
+  the gap between two segments.
+- Lap 2's gap at 103.03-103.83 s is the driver tapping the pedal; it is
+  correctly not coasting and splits that coast into two pieces.
+
+==========================================================================
+Data quirks (all verified)
+==========================================================================
+- SME_TRQSPD_Speed updates only every ~2nd row; forward-fill repeats the
+  old value. Row-to-row dv/dt is mostly 0 or noise. Use a window: the
+  project uses .diff(42) (~0.5 s) for acceleration. Matters for Step 7,
+  where projects.md says "change in speed between consecutive readings"
+  - that will be very noisy here.
+- .diff(n) looks BACKWARD, so labels lag ~0.25-0.5 s; a period computed
+  inside a lap loses its first n rows. Step 5 computes on the full run
+  first, then cuts to laps.
+- Wheel speed vs car speed: at hard throttle peaks (~51.6 s, ~98-99 s)
+  there is likely wheelspin/driveline wiggle. Not an issue during coasts.
+- Brake is never pressed during either lap (voltage max 372 < 375).
+  ETC_STATUS_BRAKELIGHT reads 1 for 95% of the run - unreliable, don't use.
+- IMU VDM_X_AXIS_ACCELERATION points BACKWARDS (positive = slowing) and
+  has a ~+0.317 m/s^2 offset (likely mount tilt; +/-0.1 m/s^2 between
+  coasts). Useful as a cross-check for Step 7 decelerations.
+- VDM_GPS_SPEED is already in m/s, NOT mph (projects.md is wrong).
+  Updates every ~0.24 s and lags motor speed by ~0.9 s.
+- GPS altitude is whole meters with ~16 updates per lap: too coarse to
+  measure slope. Each lap drives out and back, so coasts happen in both
+  directions; slope effects largely cancel if both are used (Step 7).
+
+==========================================================================
+Constants (projects.md)
+==========================================================================
+Gear ratio 12/41, wheel radius 0.2 m, car mass 221.4 kg, effective mass
+244.08 kg, air density 1.225 kg/m^3, g = 9.81.

@@ -1,0 +1,122 @@
+Step 7 - Drag + Rolling Resistance from the Coastdown Data
+
+Task (projects.md): use the Step 6 coast down data to find drag (Cd*A)
+and rolling resistance (Crr), by fitting a straight line to dv/dt vs v^2.
+
+   dv/dt = -((.5 * p * Cd * A) / m_eff) * v^2 - (Crr * m * g) / m_eff
+           \_________ slope __________/          \____ intercept ____/
+
+   .5 * p * Cd * A = -slope * m_eff
+   Crr             = -intercept * m_eff / (m * g)
+
+Constants: air density p = 1.225 kg/m^3, car mass m = 221.4 kg,
+effective mass m_eff = 244.08 kg, g = 9.81 m/s^2
+
+--------------------------------------------------------------------------
+Result
+--------------------------------------------------------------------------
+   slope           = -0.001538  (+/- 0.001854)
+   intercept       = -0.2661 m/s^2  (+/- 0.1089)
+
+   .5 * p * Cd * A = 0.375 kg/m
+   Cd * A          = 0.61 m^2     (1 std. error range: about -0.13 to 1.35)
+   Crr             = 0.030        (1 std. error range: about 0.018 to 0.042)
+
+   BOTTOM LINE: Crr is roughly known (~0.02 - 0.04). Cd*A is NOT pinned
+   down by this data - the uncertainty in the slope is bigger than the
+   slope itself, so the data can't rule out zero drag (or even negative,
+   which is impossible). 0.61 m^2 is the best-fit value, not a measured
+   one.
+
+   Plots: step7_dvdt_vs_v2.png (all points + fit)
+          step7_dvdt_vs_v2_zoom.png (y from -1 to 0.5, shows the fit line
+          and the coast averages)
+
+--------------------------------------------------------------------------
+Method (Onboarding.py, Step 7)
+--------------------------------------------------------------------------
+   1. Data: the 4 clean coasts from Step 6 (coast_segments), 3,259 rows,
+      all >= 5 m/s.
+   2. dv/dt from CONSECUTIVE readings, as projects.md says:
+      speed.diff() / time.diff(), done inside each coast separately, so
+      dv/dt never jumps from the end of one coast to the start of the next.
+      Divided by the real time step, since the segments have small holes
+      (largest 0.083 s) where dips under 5 m/s were removed.
+   3. Dropped the first row of each coast (no previous reading).
+      3,255 points left.
+   4. v^2 = speed at the same row, squared.
+   5. np.polyfit(v^2, dv/dt, 1) for slope and intercept, then the formulas
+      above.
+
+   Decision: kept consecutive readings even though it's very noisy (see
+   below), to follow the provided instructions.
+
+--------------------------------------------------------------------------
+Why the data is so noisy
+--------------------------------------------------------------------------
+   - The speed sensor updates only every ~2nd row; forward-fill copies the
+     old value in between. 58% of the dv/dt values are exactly 0, and the
+     whole change lands in the next 0.012 s step.
+   - The sensor reports speed in small fixed steps, so dv/dt comes out in
+     horizontal stripes (0, about +/-0.5, +/-2, +/-4 ... m/s^2).
+   - Result: dv/dt spreads about +/-8 m/s^2 (outliers -13 to +19), while
+     the real slowdown is only ~0.35 m/s^2. The line explains almost none
+     of the scatter (R^2 = 0.0002).
+   - The scatter does average out: mean dv/dt over all points is
+     -0.349 m/s^2, matching each coast's overall slowdown. So the fit is
+     centered on the right values - it just can't be very precise.
+
+--------------------------------------------------------------------------
+Cross-checks
+--------------------------------------------------------------------------
+   Coast averages (overall slowdown = (last speed - first speed) / time):
+
+     coast               avg v^2     avg dv/dt
+     24.63 - 38.77 s      57.1       -0.358 m/s^2
+     51.80 - 61.22 s      41.8       -0.334 m/s^2
+     99.33 - 103.03 s     98.0       -0.451 m/s^2
+    103.83 - 115.46 s     45.9       -0.317 m/s^2
+
+   These sit close to the fitted line (zoom plot), and the fastest coast
+   slows down the most, which is what drag should do. Only 4 points
+   though, and only one of them is fast.
+
+   Different dv/dt window (0.5 s, .diff(42), same as Step 5):
+     Cd*A = 1.19 m^2, Crr = 0.022
+   Both inside the uncertainty ranges above, but Cd*A doubles, which shows
+   how loosely the data sets the drag value.
+
+--------------------------------------------------------------------------
+Why drag is hard to measure here
+--------------------------------------------------------------------------
+   The coasts only cover 5 - 10.7 m/s (18 - 39 km/h). With the best-fit
+   values:
+     at  5.0 m/s: drag ~  9 N, rolling ~ 65 N
+     at 10.7 m/s: drag ~ 43 N, rolling ~ 65 N
+   Rolling resistance dominates the whole range. Drag only changes the
+   slowdown by ~0.14 m/s^2 between the slowest and fastest points, which
+   is tiny next to the +/-8 m/s^2 scatter. Faster and longer coasts would
+   be needed to measure drag properly.
+
+--------------------------------------------------------------------------
+Are the numbers plausible?
+--------------------------------------------------------------------------
+   - Cd*A ~ 0.6 m^2 is a reasonable size for a car with no wings, but it
+     is not reliable (see above).
+   - Crr ~ 0.03 is about 2x what tires alone usually give (~0.01 - 0.015).
+     Expected to be high here: "rolling resistance" in this fit includes
+     everything that doesn't depend on v^2 - chain and bearing friction,
+     motor drag while freewheeling, and any slope.
+
+--------------------------------------------------------------------------
+Other caveats
+--------------------------------------------------------------------------
+   - Slope: the coasts aren't balanced by direction (GPS longitude):
+     ~29 s heading east (24.63-38.77, 99.33-103.03, 103.83-115.46) vs
+     ~9 s heading west (51.80-61.22). So a hill does not cancel out. The
+     west coast slows about the same as the east ones at similar speed,
+     which suggests the slope is small, but it isn't proven (GPS altitude
+     is too coarse to measure it).
+   - Speed is wheel speed from motor RPM. Fine while coasting (no
+     throttle, so no wheelspin).
+   - m_eff (244.08 kg) and m (221.4 kg) are taken from projects.md as is.
